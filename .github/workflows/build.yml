@@ -1,0 +1,31 @@
+name: Build Jose Mod Amp
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      # Checkout ohne Submodule-Zwang, um Exit Code 128 zu verhindern
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      # Entferne eventuell mitgepushte lokale Build-Altlasten
+      - name: Clean stale artifacts
+        run: |
+          if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
+        shell: powershell
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 and Standalone
+        run: cmake --build build --config Release --parallel
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: JoseModAmp-Windows
+          path: build/JoseModAmp_artefacts/Release/
