@@ -2,7 +2,6 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
-// Forward declaration verhindert die Endlosschleife
 class JoseModAmpAudioProcessor;
 
 class JoseModAmpAudioProcessorEditor : public juce::AudioProcessorEditor,
@@ -21,18 +20,18 @@ public:
 private:
     JoseModAmpAudioProcessor& audioProcessor;
 
-    // Marshall Front Panel Controls
-    juce::Slider gainSlider, bassSlider, midSlider, trebleSlider, presenceSlider, masterSlider;
+    // Diezel Front Panel Knobs
+    juce::Slider gainSlider, tightSlider, bassSlider, midSlider, trebleSlider, presenceSlider, deepSlider, masterSlider;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAttachments;
 
-    // Modding Workbench Controls (Bauteile)
-    juce::Slider cathodeSlider, brightSlider, slopeSlider;
-    juce::ComboBox diodeSelector;
+    // Mode Selector & Cabinet
+    juce::ComboBox modeSelector;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
+
     juce::ToggleButton irBypassButton;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> diodeAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> irBypassAttachment;
 
-    juce::TextButton loadIrBtn { "Load Cab .WAV (oder Drag&Drop)" };
+    juce::TextButton loadIrBtn { "Load Diezel 4x12 IR (.wav)" };
     std::unique_ptr<juce::FileChooser> fileChooser;
     juce::Label irNameLabel;
 
