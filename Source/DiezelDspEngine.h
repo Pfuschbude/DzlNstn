@@ -13,27 +13,34 @@ public:
         // Puffer für IR B vorbereiten
         tempBufferB.setSize(static_cast<int>(spec.numChannels), static_cast<int>(spec.maximumBlockSize));
 
-        // TS Screamer Boost Filter (TS808)
+        // TS Screamer Boost: Sanfter Bass-Cut bei 240 Hz (statt 720 Hz), damit das Low-End fett und regelbar bleibt!
         tsHighpass.prepare(spec);
         tsHighpass.setType(juce::dsp::FirstOrderTPTFilterType::highpass);
-        tsHighpass.setCutoffFrequency(720.0f);
+        tsHighpass.setCutoffFrequency(240.0f);
 
         for (int ch = 0; ch < 2; ++ch)
         {
             tsMidHump[ch].prepare(spec);
             megaMidScoop[ch].prepare(spec);
+            megaSnapFilter[ch].prepare(spec);
         }
 
         auto tsMidCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
-            sampleRate, 720.0f, 0.85f, juce::Decibels::decibelsToGain(8.0f));
+            sampleRate, 750.0f, 0.85f, juce::Decibels::decibelsToGain(6.5f));
         for (int ch = 0; ch < 2; ++ch)
             tsMidHump[ch].coefficients = tsMidCoeffs;
 
-        // Mega Voicing: Gezielter Entmatschungs-Filter bei 450 Hz vor der Zerre
+        // Mega Voicing: Gezielter Entmatschungs-Filter bei 420 Hz vor der Zerre
         auto scoopCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
-            sampleRate, 450.0f, 1.3f, juce::Decibels::decibelsToGain(-3.5f));
+            sampleRate, 420.0f, 1.4f, juce::Decibels::decibelsToGain(-4.5f));
         for (int ch = 0; ch < 2; ++ch)
             megaMidScoop[ch].coefficients = scoopCoeffs;
+
+        // Mega Voicing: Perkussiver Pick-Snap Filter bei 2.8 kHz (für knochenharte Palm-Mute Transienten)
+        auto snapCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
+            sampleRate, 2800.0f, 1.3f, juce::Decibels::decibelsToGain(3.5f));
+        for (int ch = 0; ch < 2; ++ch)
+            megaSnapFilter[ch].coefficients = snapCoeffs;
 
         // 1. Pre-Tightening Filters (Steilflankig gegen Matsch)
         preHighpass1.prepare(spec);
@@ -82,6 +89,7 @@ public:
         {
             tsMidHump[ch].reset();
             megaMidScoop[ch].reset();
+            megaSnapFilter[ch].reset();
         }
 
         preHighpass1.reset();
@@ -123,7 +131,7 @@ public:
     {
         gateParam = val;
         if (gateParam <= 0.02f)
-            gateThreshold = 0.0f; // Gate aus
+            gateThreshold = 0.0f;
         else
             gateThreshold = juce::Decibels::decibelsToGain(juce::jmap(gateParam, 0.02f, 1.0f, -80.0f, -22.0f));
     }
@@ -147,18 +155,18 @@ public:
         const size_t numChannels = block.getNumChannels();
         const size_t numSamples = block.getNumSamples();
 
-        // Ausgewogene Gain-Skalierung für strafferen, musikalischeren Sound
+        // Crunch Gain wieder auf den satten Wert (14.0f) zurückgesetzt!
         float driveMultiplier = 1.0f;
         if (ampMode == 0)      driveMultiplier = 2.5f;   // Clean
-        else if (ampMode == 1) driveMultiplier = 10.5f;  // Crunch (harmonisch & tight)
-        else                   driveMultiplier = 18.0f;  // Mega (nicht matschig, sondern fokussiert)
+        else if (ampMode == 1) driveMultiplier = 14.0f;  // Crunch (wieder wie vorher gewünscht!)
+        else                   driveMultiplier = 20.0f;  // Mega (mit experimenteller Palm-Mute Architektur)
 
         const float drive = 1.0f + std::pow(gainParam * driveMultiplier, 1.85f);
         const float outVol = std::pow(masterParam, 1.6f) * 0.75f;
 
         for (size_t i = 0; i < numSamples; ++i)
         {
-            // Schnelle Noise Gate Hysterese auf dem sauberen Gitarren-Eingangssignal
+            // Noise Gate Hysterese am Eingang
             if (gateThreshold > 0.00001f)
             {
                 float inLevel = 0.0f;
@@ -166,7 +174,7 @@ public:
                     inLevel = std::max(inLevel, std::abs(block.getChannelPointer(ch)[i]));
 
                 if (inLevel > gateEnv)
-                    gateEnv = inLevel; // Sofortiges Öffnen beim Anschlag
+                    gateEnv = inLevel;
                 else
                     gateEnv += (inLevel - gateEnv) * gateReleaseCoeff;
 
@@ -181,15 +189,16 @@ public:
             for (size_t ch = 0; ch < numChannels; ++ch)
             {
                 float* data = block.getChannelPointer(ch);
-                float x = data[i] * gateGain; // Gate angewendet
+                float x = data[i] * gateGain;
                 int fCh = (ch < 2) ? static_cast<int>(ch) : 0;
 
-                // 0. Integrierter Tube Screamer TS808 Boost
+                // 0. Integrierter TS Screamer Boost:
+                // Behält Tiefen ab 240 Hz bei + dry punch blend, damit das Low-End fett und tief regelbar bleibt!
                 if (tsBoost)
                 {
-                    float tsSig = tsHighpass.processSample(static_cast<int>(ch), x);
-                    tsSig = tsMidHump[fCh].processSample(tsSig);
-                    x = std::tanh(tsSig * 2.8f) * 1.65f;
+                    float tsHigh = tsHighpass.processSample(static_cast<int>(ch), x);
+                    tsHigh = tsMidHump[fCh].processSample(tsHigh);
+                    x = std::tanh(tsHigh * 2.5f) * 1.5f + (x * 0.35f);
                 }
 
                 // 1. Ultra-Tight Pre-Filtering
@@ -197,35 +206,50 @@ public:
                 x = preHighpass2.processSample(static_cast<int>(ch), x);
                 x = preBiteFilter[fCh].processSample(x);
 
-                // Spezielles Mega Voicing: Vor der Zerre boxige Frequenzen absenken
+                // EXPERIMENTELLES MEGA PALM-MUTE VOICING:
                 if (ampMode == 2)
+                {
                     x = megaMidScoop[fCh].processSample(x);
+                    x = megaSnapFilter[fCh].processSample(x);
+
+                    // Dynamischer Palm-Mute Chug Limiter:
+                    // Fängt massive subsonische Palm-Mute Transienten ab, bevor sie die Röhrenstufen verstopfen
+                    const float palmLimit = 0.85f;
+                    float absX = std::abs(x);
+                    if (absX > palmLimit)
+                    {
+                        float excess = absX - palmLimit;
+                        x = (x > 0.0f ? 1.0f : -1.0f) * (palmLimit + std::tanh(excess * 1.6f) * 0.25f);
+                    }
+                }
 
                 // 2. Kaskadierte 12AX7-Röhrenstufen
                 // Stufe 1: Dynamischer Eingang
                 x = triodeStage(x * drive * 0.95f, 1.35f);
                 x = dcBlocker[0].processSample(static_cast<int>(ch), x);
 
-                // Stufe 2: Crunch-Sättigungsstufe
-                x = triodeStage(x * (1.6f + gainParam * 1.2f), 1.55f);
+                // Stufe 2: Crunch-Sättigungsstufe (im Crunch-Modus voll wie vorher)
+                float st2Multiplier = (ampMode == 1) ? (1.8f + gainParam * 1.5f) : (1.6f + gainParam * 1.2f);
+                x = triodeStage(x * st2Multiplier, 1.55f);
                 x = dcBlocker[1].processSample(static_cast<int>(ch), x);
 
-                // Stufe 3: High-Gain Kompression (Crunch & Mega)
+                // Stufe 3: High-Gain Kompression
                 if (ampMode >= 1)
                 {
-                    float stage3Drive = (ampMode == 2) ? 2.2f : 1.6f;
+                    float stage3Drive = (ampMode == 1) ? 1.7f : 2.3f;
                     x = triodeStage(x * stage3Drive, 1.75f);
                     x = dcBlocker[2].processSample(static_cast<int>(ch), x);
                 }
 
-                // Stufe 4: Fokussierte Mega-Stufe mit warmer Röhrenkompression
+                // Stufe 4: Spezifische Mega-Lead- & Chug-Stufe
                 if (ampMode == 2)
                 {
-                    x = triodeStage(x * 1.9f, 1.85f);
+                    // Präzises Mega-Chug Sättigungsverhalten gegen DC-Drift bei extrem schnellen Palm-Mutes
+                    x = megaChugStage(x * 1.85f);
                     x = dcBlocker[3].processSample(static_cast<int>(ch), x);
                 }
 
-                // 3. Tonestack & Endstufen-Deep
+                // 3. Tonestack & Endstufen-Deep (Satter Resonanzpunch nach der Zerre)
                 x = bassFilter[fCh].processSample(x);
                 x = midFilter[fCh].processSample(x);
                 x = trebleFilter[fCh].processSample(x);
@@ -280,17 +304,18 @@ private:
         if (sampleRate <= 0.0) return;
 
         float baseFreq = 70.0f;
-        if (ampMode == 1) baseFreq = 115.0f;
-        if (ampMode == 2) baseFreq = 150.0f;
+        if (ampMode == 1) baseFreq = 110.0f;
+        if (ampMode == 2) baseFreq = 165.0f; // Höhere Pre-Filterung im Mega Mode für maximale Tightness
 
-        float targetCutoff = juce::jmap(tightParam, 0.0f, 1.0f, baseFreq, baseFreq + 120.0f);
+        float targetCutoff = juce::jmap(tightParam, 0.0f, 1.0f, baseFreq, baseFreq + (ampMode == 2 ? 140.0f : 120.0f));
         preHighpass1.setCutoffFrequency(targetCutoff);
-        preHighpass2.setCutoffFrequency(targetCutoff * 0.75f);
+        preHighpass2.setCutoffFrequency(targetCutoff * 0.8f);
 
         // Pick-Attack Peak
-        float biteFreq = (ampMode == 2) ? 2400.0f : 2100.0f;
+        float biteFreq = (ampMode == 2) ? 2600.0f : 2100.0f;
+        float biteGain = (ampMode == 2) ? 5.5f : 4.0f;
         auto biteCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
-            sampleRate, biteFreq, 1.0f, juce::Decibels::decibelsToGain(juce::jmap(tightParam, 0.0f, 1.0f, 1.0f, 4.5f)));
+            sampleRate, biteFreq, 1.1f, juce::Decibels::decibelsToGain(juce::jmap(tightParam, 0.0f, 1.0f, 1.0f, biteGain)));
 
         for (int ch = 0; ch < 2; ++ch)
             preBiteFilter[ch].coefficients = biteCoeffs;
@@ -300,26 +325,31 @@ private:
     {
         if (sampleRate <= 0.0) return;
 
-        // Bass Low-Shelf (90 Hz)
+        // Bass Low-Shelf (95 Hz)
         auto bassCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowShelf(
-            sampleRate, 90.0f, 0.707f, juce::Decibels::decibelsToGain((bassParam - 0.5f) * 22.0f));
+            sampleRate, 95.0f, 0.707f, juce::Decibels::decibelsToGain((bassParam - 0.5f) * 24.0f));
 
-        // Mittenfrequenz: Im Mega-Modus 620 Hz für mächtiges Diezel-Knurren, sonst 680 Hz
-        float midCenter = (ampMode == 2) ? 620.0f : 680.0f;
+        // Mittenfrequenz: Im Mega-Modus 600 Hz für böses Knurren, sonst 680 Hz
+        float midCenter = (ampMode == 2) ? 600.0f : 680.0f;
+        float midQ = (ampMode == 2) ? 1.4f : 1.2f;
         auto midCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
-            sampleRate, midCenter, 1.2f, juce::Decibels::decibelsToGain((midParam - 0.5f) * 22.0f));
+            sampleRate, midCenter, midQ, juce::Decibels::decibelsToGain((midParam - 0.5f) * 22.0f));
 
-        // Treble High-Shelf (3.6 kHz)
+        // Treble High-Shelf (3.5 kHz)
         auto trebleCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighShelf(
-            sampleRate, 3600.0f, 0.707f, juce::Decibels::decibelsToGain((trebleParam - 0.5f) * 20.0f));
+            sampleRate, 3500.0f, 0.707f, juce::Decibels::decibelsToGain((trebleParam - 0.5f) * 20.0f));
 
-        // Presence Peaking (5.2 kHz)
+        // Presence Peaking (5.0 kHz)
         auto presenceCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
-            sampleRate, 5200.0f, 0.8f, juce::Decibels::decibelsToGain((presenceParam - 0.5f) * 16.0f));
+            sampleRate, 5000.0f, 0.8f, juce::Decibels::decibelsToGain((presenceParam - 0.5f) * 16.0f));
 
-        // DIEZEL DEEP: Resonanzpeak bei 56 Hz
+        // DIEZEL DEEP:
+        // Im Mega-Modus: Resonanter Sub-Punch bei 68 Hz mit hohem Q (2.0)
+        // -> Knallt wie eine Faust in den Magen bei Palm-Mutes, ohne dass die Röhren verwaschen klingen!
+        float deepFreq = (ampMode == 2) ? 68.0f : 56.0f;
+        float deepQ = (ampMode == 2) ? 2.0f : 1.6f;
         auto deepCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
-            sampleRate, 56.0f, 1.7f, juce::Decibels::decibelsToGain(deepParam * 18.0f));
+            sampleRate, deepFreq, deepQ, juce::Decibels::decibelsToGain(deepParam * 20.0f));
 
         for (int ch = 0; ch < 2; ++ch)
         {
@@ -337,6 +367,16 @@ private:
             return std::tanh(in);
         else
             return std::tanh(in * asymmetry) / asymmetry;
+    }
+
+    // Experimentelle Stufe 4 für den Mega-Modus:
+    // Schnelles Sättigungsverhalten, das unkontrollierten Bass-Matscheffekt eliminiert
+    inline float megaChugStage(float in)
+    {
+        float s = std::tanh(in * 1.6f);
+        if (s > 0.70f)  s = 0.70f + 0.10f * std::tanh((s - 0.70f) * 4.0f);
+        if (s < -0.70f) s = -0.70f + 0.10f * std::tanh((s + 0.70f) * 4.0f);
+        return s;
     }
 
     double sampleRate = 48000.0;
@@ -371,6 +411,7 @@ private:
     juce::dsp::FirstOrderTPTFilter<float> tsHighpass;
     juce::dsp::IIR::Filter<float> tsMidHump[2];
     juce::dsp::IIR::Filter<float> megaMidScoop[2];
+    juce::dsp::IIR::Filter<float> megaSnapFilter[2];
 
     juce::dsp::FirstOrderTPTFilter<float> preHighpass1;
     juce::dsp::FirstOrderTPTFilter<float> preHighpass2;
