@@ -1,47 +1,40 @@
-#pragma once
-#include <juce_audio_processors/juce_audio_processors.h>
-#include "DiezelDspEngine.h"
+cmake_minimum_required(VERSION 3.22)
+project(DiezelEinstein VERSION 1.0.0)
 
-class JoseModAmpAudioProcessor : public juce::AudioProcessor
-{
-public:
-    JoseModAmpAudioProcessor();
-    ~JoseModAmpAudioProcessor() override = default;
+# JUCE 8 via FetchContent laden
+include(FetchContent)
+FetchContent_Declare(
+    JUCE
+    GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+    GIT_TAG 8.0.4
+)
+FetchContent_MakeAvailable(JUCE)
 
-    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override;
+juce_add_plugin(DiezelEinstein
+    COMPANY_NAME "Pfuschbude"
+    PLUGIN_MANUFACTURER_CODE Pfsc
+    PLUGIN_CODE DzEi
+    FORMATS VST3 Standalone
+    PRODUCT_NAME "Diezel Einstein Amp"
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
+)
 
-    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
+target_sources(DiezelEinstein PRIVATE
+    Source/PluginProcessor.cpp
+    Source/PluginProcessor.h
+    Source/PluginEditor.cpp
+    Source/PluginEditor.h
+    Source/DiezelDspEngine.h
+)
 
-    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+target_compile_features(DiezelEinstein PRIVATE cxx_std_20)
 
-    juce::AudioProcessorEditor* createEditor() override;
-    bool hasEditor() const override { return true; }
-
-    const juce::String getName() const override { return "Diezel Einstein Amp"; }
-
-    bool acceptsMidi() const override { return false; }
-    bool producesMidi() const override { return false; }
-    bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
-
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return {}; }
-    void changeProgramName(int, const juce::String&) override {}
-
-    void getStateInformation(juce::MemoryBlock& destData) override;
-    void setStateInformation(const void* data, int sizeInBytes) override;
-
-    juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
-    void loadCabFile(const juce::File& file) { dspEngine.loadCabinetIR(file); }
-
-private:
-    juce::AudioProcessorValueTreeState apvts;
-    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-
-    DiezelDspEngine dspEngine;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JoseModAmpAudioProcessor)
-};
+target_link_libraries(DiezelEinstein PRIVATE
+    juce::juce_audio_utils
+    juce::juce_dsp
+    juce::juce_gui_basics
+    juce::juce_gui_extra
+)
