@@ -35,7 +35,8 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
-    void loadCabFile(const juce::File& file) { dspEngine.loadCabinetIR(file); }
+    void loadCabFileA(const juce::File& file) { dspEngine.loadCabinetIR_A(file); }
+    void loadCabFileB(const juce::File& file) { dspEngine.loadCabinetIR_B(file); }
 
 private:
     juce::AudioProcessorValueTreeState apvts;

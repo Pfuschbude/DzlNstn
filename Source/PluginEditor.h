@@ -20,25 +20,38 @@ public:
 private:
     DiezelEinsteinAudioProcessor& audioProcessor;
 
-    // Diezel Front Panel Knobs
+    // Front Panel Knobs
     juce::Slider gainSlider, tightSlider, bassSlider, midSlider, trebleSlider, presenceSlider, deepSlider, masterSlider;
-    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAttachments;
+    juce::Slider gateSlider;
 
-    // Mode Selector & TS Boost & Cabinet
-    juce::ComboBox modeSelector;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
-
-    juce::ToggleButton tsBoostButton;
+    // Kanal-spezifische Attachments (werden dynamisch je nach Modus neu verbunden)
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> channelSliderAttachments;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> tsBoostAttachment;
 
-    juce::ToggleButton irBypassButton;
+    // Globale Attachments
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> gateAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> irBlendAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> irBypassAttachment;
 
-    juce::TextButton loadIrBtn { "Load Diezel 4x12 IR (.wav)" };
-    std::unique_ptr<juce::FileChooser> fileChooser;
-    juce::Label irNameLabel;
+    // Mode Selector & TS Boost
+    juce::ComboBox modeSelector;
+    juce::ToggleButton tsBoostButton;
 
-    void setupRotary(juce::Slider& slider, const juce::String& paramId);
+    // Dual IR Loader Controls
+    juce::TextButton loadIrBtnA { "Load Cab A (.wav)" };
+    juce::Label irNameLabelA;
+    juce::TextButton loadIrBtnB { "Load Cab B (.wav)" };
+    juce::Label irNameLabelB;
+    juce::Slider irBlendSlider;
+    juce::ToggleButton irBypassButton;
+
+    std::unique_ptr<juce::FileChooser> fileChooserA;
+    std::unique_ptr<juce::FileChooser> fileChooserB;
+
+    void setupRotary(juce::Slider& slider);
+    void attachRotary(juce::Slider& slider, const juce::String& paramId);
+    void updateChannelAttachments();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DiezelEinsteinAudioProcessorEditor)
 };
