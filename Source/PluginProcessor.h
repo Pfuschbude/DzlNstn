@@ -1,6 +1,6 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
-#include "JoseDspEngine.h"
+#include "DiezelDspEngine.h"
 
 class JoseModAmpAudioProcessor : public juce::AudioProcessor
 {
@@ -18,7 +18,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "Jose Modded Marshall"; }
+    const juce::String getName() const override { return "Diezel Einstein Amp"; }
 
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
@@ -41,7 +41,7 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    JoseDspEngine dspEngine;
+    DiezelDspEngine dspEngine;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JoseModAmpAudioProcessor)
 };
