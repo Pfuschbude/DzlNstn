@@ -24,9 +24,12 @@ private:
     juce::Slider gainSlider, tightSlider, bassSlider, midSlider, trebleSlider, presenceSlider, deepSlider, masterSlider;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAttachments;
 
-    // Mode Selector & Cabinet
+    // Mode Selector & TS Boost & Cabinet
     juce::ComboBox modeSelector;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
+
+    juce::ToggleButton tsBoostButton;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> tsBoostAttachment;
 
     juce::ToggleButton irBypassButton;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> irBypassAttachment;

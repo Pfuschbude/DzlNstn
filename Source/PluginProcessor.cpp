@@ -23,8 +23,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout DiezelEinsteinAudioProcessor
     params.push_back(std::make_unique<juce::AudioParameterFloat>("deep", "Deep", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.65f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("master", "Master", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.6f));
 
-    // Mode Selector & Cabinet
+    // Mode Selector & Cabinet & TS Boost
     params.push_back(std::make_unique<juce::AudioParameterChoice>("amp_mode", "Amp Mode", juce::StringArray{"Clean", "Crunch", "Mega"}, 2));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("ts_boost", "TS808 Screamer Boost", false));
     params.push_back(std::make_unique<juce::AudioParameterBool>("ir_bypass", "Bypass IR Cab", false));
 
     return { params.begin(), params.end() };
@@ -71,6 +72,7 @@ void DiezelEinsteinAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     dspEngine.setMaster(*apvts.getRawParameterValue("master"));
 
     dspEngine.setMode(static_cast<int>(*apvts.getRawParameterValue("amp_mode")));
+    dspEngine.setTsBoost(*apvts.getRawParameterValue("ts_boost") > 0.5f);
     dspEngine.setIrBypass(*apvts.getRawParameterValue("ir_bypass") > 0.5f);
 
     juce::dsp::AudioBlock<float> block(buffer);

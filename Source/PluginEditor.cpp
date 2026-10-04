@@ -24,6 +24,14 @@ DiezelEinsteinAudioProcessorEditor::DiezelEinsteinAudioProcessorEditor(DiezelEin
     modeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         audioProcessor.getAPVTS(), "amp_mode", modeSelector);
 
+    // TS Screamer Boost Button
+    tsBoostButton.setButtonText("TS SCREAMER BOOST");
+    tsBoostButton.setColour(juce::ToggleButton::textColourId, juce::Colour(0xff00e5ff));
+    tsBoostButton.setColour(juce::ToggleButton::tickColourId, juce::Colour(0xff00e5ff));
+    addAndMakeVisible(tsBoostButton);
+    tsBoostAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        audioProcessor.getAPVTS(), "ts_boost", tsBoostButton);
+
     // IR Loader Controls
     addAndMakeVisible(loadIrBtn);
     loadIrBtn.onClick = [this]() {
@@ -128,7 +136,8 @@ void DiezelEinsteinAudioProcessorEditor::resized()
     masterSlider.setBounds(startX + 7 * spacing, 70, 80, 115);
 
     // Untere Leiste
-    modeSelector.setBounds(180, 278, 200, 26);
+    modeSelector.setBounds(180, 278, 170, 26);
+    tsBoostButton.setBounds(370, 278, 200, 26);
     loadIrBtn.setBounds(180, 318, 240, 26);
     irNameLabel.setBounds(435, 318, 300, 26);
     irBypassButton.setBounds(760, 318, 120, 26);
