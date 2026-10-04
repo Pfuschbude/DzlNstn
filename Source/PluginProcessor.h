@@ -35,14 +35,29 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
-    void loadCabFileA(const juce::File& file) { dspEngine.loadCabinetIR_A(file); }
-    void loadCabFileB(const juce::File& file) { dspEngine.loadCabinetIR_B(file); }
+
+    // Dual IR Loader & Memory
+    void loadCabFileA(const juce::File& file);
+    void loadCabFileB(const juce::File& file);
+    juce::File getIrFileA() const { return irFileA; }
+    juce::File getIrFileB() const { return irFileB; }
+    juce::File getLastIrDirA() const { return lastIrDirA; }
+    juce::File getLastIrDirB() const { return lastIrDirB; }
+
+    // Preset Speichern & Laden
+    void savePresetToFile(const juce::File& file);
+    bool loadPresetFromFile(const juce::File& file);
 
 private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     DiezelDspEngine dspEngine;
+
+    juce::File irFileA;
+    juce::File irFileB;
+    juce::File lastIrDirA;
+    juce::File lastIrDirB;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DiezelEinsteinAudioProcessor)
 };

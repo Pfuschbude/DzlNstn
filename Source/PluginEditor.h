@@ -24,7 +24,7 @@ private:
     juce::Slider gainSlider, tightSlider, bassSlider, midSlider, trebleSlider, presenceSlider, deepSlider, masterSlider;
     juce::Slider gateSlider;
 
-    // Kanal-spezifische Attachments (werden dynamisch je nach Modus neu verbunden)
+    // Kanal-spezifische Attachments
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> channelSliderAttachments;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> tsBoostAttachment;
 
@@ -39,15 +39,37 @@ private:
     juce::ToggleButton tsBoostButton;
 
     // Dual IR Loader Controls
-    juce::TextButton loadIrBtnA { "Load Cab A (.wav)" };
+    juce::TextButton loadIrBtnA { "Load Cab A" };
+    juce::TextButton prevIrBtnA { "<" };
+    juce::TextButton nextIrBtnA { ">" };
     juce::Label irNameLabelA;
-    juce::TextButton loadIrBtnB { "Load Cab B (.wav)" };
+
+    juce::TextButton loadIrBtnB { "Load Cab B" };
+    juce::TextButton prevIrBtnB { "<" };
+    juce::TextButton nextIrBtnB { ">" };
     juce::Label irNameLabelB;
+
     juce::Slider irBlendSlider;
     juce::ToggleButton irBypassButton;
 
     std::unique_ptr<juce::FileChooser> fileChooserA;
     std::unique_ptr<juce::FileChooser> fileChooserB;
+
+    // Preset Buttons
+    juce::TextButton savePresetBtn { "Save Preset" };
+    juce::TextButton loadPresetBtn { "Load Preset" };
+    std::unique_ptr<juce::FileChooser> presetFileChooser;
+
+    // Ordner-Dateilisten zum Durchschalten
+    juce::Array<juce::File> irFilesA;
+    int currentIrIndexA = -1;
+    juce::Array<juce::File> irFilesB;
+    int currentIrIndexB = -1;
+
+    void scanIrFolderA(const juce::File& fileInFolder);
+    void scanIrFolderB(const juce::File& fileInFolder);
+    void selectIrIndexA(int index);
+    void selectIrIndexB(int index);
 
     void setupRotary(juce::Slider& slider);
     void attachRotary(juce::Slider& slider, const juce::String& paramId);

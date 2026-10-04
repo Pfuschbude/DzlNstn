@@ -41,44 +41,124 @@ DiezelEinsteinAudioProcessorEditor::DiezelEinsteinAudioProcessorEditor(DiezelEin
         updateChannelAttachments();
     };
 
-    // Initiale Kanal-Anbindung herstellen
     updateChannelAttachments();
+
+    // Preset Buttons
+    savePresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff222328));
+    savePresetBtn.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff00b0ff));
+    addAndMakeVisible(savePresetBtn);
+    savePresetBtn.onClick = [this]() {
+        presetFileChooser = std::make_unique<juce::FileChooser>(
+            "Save Diezel Preset...", juce::File::getSpecialLocation(juce::File::userDocumentsDirectory), "*.diezel;*.xml");
+        presetFileChooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+            [this](const juce::FileChooser& fc) {
+                auto file = fc.getResult();
+                if (file != juce::File{})
+                    audioProcessor.savePresetToFile(file);
+            });
+    };
+
+    loadPresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff222328));
+    loadPresetBtn.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff00b0ff));
+    addAndMakeVisible(loadPresetBtn);
+    loadPresetBtn.onClick = [this]() {
+        presetFileChooser = std::make_unique<juce::FileChooser>(
+            "Load Diezel Preset...", juce::File::getSpecialLocation(juce::File::userDocumentsDirectory), "*.diezel;*.xml");
+        presetFileChooser->launchAsync(juce::FileBrowserComponent::openMode,
+            [this](const juce::FileChooser& fc) {
+                auto file = fc.getResult();
+                if (file.existsAsFile())
+                {
+                    if (audioProcessor.loadPresetFromFile(file))
+                    {
+                        updateChannelAttachments();
+                        if (audioProcessor.getIrFileA().existsAsFile())
+                        {
+                            scanIrFolderA(audioProcessor.getIrFileA());
+                            irNameLabelA.setText("A: " + audioProcessor.getIrFileA().getFileName(), juce::dontSendNotification);
+                        }
+                        if (audioProcessor.getIrFileB().existsAsFile())
+                        {
+                            scanIrFolderB(audioProcessor.getIrFileB());
+                            irNameLabelB.setText("B: " + audioProcessor.getIrFileB().getFileName(), juce::dontSendNotification);
+                        }
+                    }
+                }
+            });
+    };
 
     // Dual IR Loader A
     addAndMakeVisible(loadIrBtnA);
     loadIrBtnA.onClick = [this]() {
+        auto startDir = audioProcessor.getLastIrDirA().isDirectory() 
+            ? audioProcessor.getLastIrDirA() 
+            : juce::File::getSpecialLocation(juce::File::userHomeDirectory);
+
         fileChooserA = std::make_unique<juce::FileChooser>(
-            "Wähle Speaker IR A (.wav)...", juce::File::getSpecialLocation(juce::File::userHomeDirectory), "*.wav");
+            "Wähle Speaker IR A (.wav)...", startDir, "*.wav;*.aif;*.aiff;*.flac");
         fileChooserA->launchAsync(juce::FileBrowserComponent::openMode,
             [this](const juce::FileChooser& fc) {
                 auto file = fc.getResult();
                 if (file.existsAsFile()) {
+                    scanIrFolderA(file);
                     audioProcessor.loadCabFileA(file);
                     irNameLabelA.setText("A: " + file.getFileName(), juce::dontSendNotification);
                 }
             });
     };
-    irNameLabelA.setText("Cab A: Standard", juce::dontSendNotification);
+
+    addAndMakeVisible(prevIrBtnA);
+    prevIrBtnA.onClick = [this]() { selectIrIndexA(currentIrIndexA - 1); };
+
+    addAndMakeVisible(nextIrBtnA);
+    nextIrBtnA.onClick = [this]() { selectIrIndexA(currentIrIndexA + 1); };
+
+    irNameLabelA.setText("Cab A: Keine IR", juce::dontSendNotification);
     irNameLabelA.setColour(juce::Label::textColourId, juce::Colour(0xff4fc3f7));
     addAndMakeVisible(irNameLabelA);
+
+    // Initialen Zustand für A wiederherstellen, falls im State gespeichert
+    if (audioProcessor.getIrFileA().existsAsFile())
+    {
+        scanIrFolderA(audioProcessor.getIrFileA());
+        irNameLabelA.setText("A: " + audioProcessor.getIrFileA().getFileName(), juce::dontSendNotification);
+    }
 
     // Dual IR Loader B
     addAndMakeVisible(loadIrBtnB);
     loadIrBtnB.onClick = [this]() {
+        auto startDir = audioProcessor.getLastIrDirB().isDirectory() 
+            ? audioProcessor.getLastIrDirB() 
+            : juce::File::getSpecialLocation(juce::File::userHomeDirectory);
+
         fileChooserB = std::make_unique<juce::FileChooser>(
-            "Wähle Speaker IR B (.wav)...", juce::File::getSpecialLocation(juce::File::userHomeDirectory), "*.wav");
+            "Wähle Speaker IR B (.wav)...", startDir, "*.wav;*.aif;*.aiff;*.flac");
         fileChooserB->launchAsync(juce::FileBrowserComponent::openMode,
             [this](const juce::FileChooser& fc) {
                 auto file = fc.getResult();
                 if (file.existsAsFile()) {
+                    scanIrFolderB(file);
                     audioProcessor.loadCabFileB(file);
                     irNameLabelB.setText("B: " + file.getFileName(), juce::dontSendNotification);
                 }
             });
     };
-    irNameLabelB.setText("Cab B: Leer", juce::dontSendNotification);
+
+    addAndMakeVisible(prevIrBtnB);
+    prevIrBtnB.onClick = [this]() { selectIrIndexB(currentIrIndexB - 1); };
+
+    addAndMakeVisible(nextIrBtnB);
+    nextIrBtnB.onClick = [this]() { selectIrIndexB(currentIrIndexB + 1); };
+
+    irNameLabelB.setText("Cab B: Keine IR", juce::dontSendNotification);
     irNameLabelB.setColour(juce::Label::textColourId, juce::Colour(0xff4fc3f7));
     addAndMakeVisible(irNameLabelB);
+
+    if (audioProcessor.getIrFileB().existsAsFile())
+    {
+        scanIrFolderB(audioProcessor.getIrFileB());
+        irNameLabelB.setText("B: " + audioProcessor.getIrFileB().getFileName(), juce::dontSendNotification);
+    }
 
     // IR Blend Fader (A <---> B)
     irBlendSlider.setSliderStyle(juce::Slider::LinearHorizontal);
@@ -93,6 +173,48 @@ DiezelEinsteinAudioProcessorEditor::DiezelEinsteinAudioProcessorEditor(DiezelEin
     addAndMakeVisible(irBypassButton);
     irBypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         audioProcessor.getAPVTS(), "ir_bypass", irBypassButton);
+}
+
+void DiezelEinsteinAudioProcessorEditor::scanIrFolderA(const juce::File& fileInFolder)
+{
+    auto parent = fileInFolder.getParentDirectory();
+    irFilesA = parent.findChildFiles(juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.flac");
+    irFilesA.sort();
+    currentIrIndexA = irFilesA.indexOf(fileInFolder);
+}
+
+void DiezelEinsteinAudioProcessorEditor::scanIrFolderB(const juce::File& fileInFolder)
+{
+    auto parent = fileInFolder.getParentDirectory();
+    irFilesB = parent.findChildFiles(juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.flac");
+    irFilesB.sort();
+    currentIrIndexB = irFilesB.indexOf(fileInFolder);
+}
+
+void DiezelEinsteinAudioProcessorEditor::selectIrIndexA(int index)
+{
+    if (irFilesA.isEmpty()) return;
+
+    if (index < 0) index = irFilesA.size() - 1;
+    if (index >= irFilesA.size()) index = 0;
+
+    currentIrIndexA = index;
+    auto file = irFilesA[currentIrIndexA];
+    audioProcessor.loadCabFileA(file);
+    irNameLabelA.setText("A: " + file.getFileName(), juce::dontSendNotification);
+}
+
+void DiezelEinsteinAudioProcessorEditor::selectIrIndexB(int index)
+{
+    if (irFilesB.isEmpty()) return;
+
+    if (index < 0) index = irFilesB.size() - 1;
+    if (index >= irFilesB.size()) index = 0;
+
+    currentIrIndexB = index;
+    auto file = irFilesB[currentIrIndexB];
+    audioProcessor.loadCabFileB(file);
+    irNameLabelB.setText("B: " + file.getFileName(), juce::dontSendNotification);
 }
 
 void DiezelEinsteinAudioProcessorEditor::setupRotary(juce::Slider& s)
@@ -155,7 +277,7 @@ void DiezelEinsteinAudioProcessorEditor::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour(0xff888a95));
     g.setFont(juce::FontOptions(11.0f));
-    g.drawText("MULTI-CHANNEL MEMORY & TS BOOST", 270, 24, 250, 25, juce::Justification::left);
+    g.drawText("CHANNEL MEMORY & DUAL IR BROWSER", 270, 24, 250, 25, juce::Justification::left);
 
     // Regler-Labels (9 Regler)
     g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
@@ -168,7 +290,7 @@ void DiezelEinsteinAudioProcessorEditor::paint(juce::Graphics& g)
         if (i == 1 || i == 6)
             g.setColour(juce::Colour(0xff00b0ff));
         else if (i == 8)
-            g.setColour(juce::Colour(0xff00e5ff)); // Gate in Cyan
+            g.setColour(juce::Colour(0xff00e5ff));
         else
             g.setColour(juce::Colour(0xffcfd8dc));
 
@@ -184,15 +306,19 @@ void DiezelEinsteinAudioProcessorEditor::paint(juce::Graphics& g)
 
     g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
     g.setColour(juce::Colour(0xff00b0ff));
-    g.drawText("DUAL CABINET IR STUDIO & BLEND", 35, 280, 280, 20, juce::Justification::left);
+    g.drawText("DUAL CABINET IR BROWSER & BLEND", 35, 280, 280, 20, juce::Justification::left);
 
     g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
     g.setColour(juce::Colour(0xffcfd8dc));
-    g.drawText("CAB A <--- BLEND ---> CAB B", 390, 310, 220, 18, juce::Justification::centred);
+    g.drawText("CAB A <--- BLEND ---> CAB B", 380, 310, 240, 18, juce::Justification::centred);
 }
 
 void DiezelEinsteinAudioProcessorEditor::resized()
 {
+    // Preset Buttons oben rechts
+    savePresetBtn.setBounds(760, 19, 100, 24);
+    loadPresetBtn.setBounds(870, 19, 100, 24);
+
     int startX = 35;
     int spacing = 104;
 
@@ -211,16 +337,23 @@ void DiezelEinsteinAudioProcessorEditor::resized()
     modeSelector.setBounds(35, 205, 170, 28);
     tsBoostButton.setBounds(225, 205, 190, 28);
 
-    // Untere Leiste: Dual IR Loader & Blend Fader
-    loadIrBtnA.setBounds(35, 320, 140, 26);
-    irNameLabelA.setBounds(35, 350, 180, 22);
+    // Untere Leiste: Cab A mit Browser [<] [>]
+    loadIrBtnA.setBounds(35, 318, 105, 26);
+    prevIrBtnA.setBounds(145, 318, 28, 26);
+    nextIrBtnA.setBounds(176, 318, 28, 26);
+    irNameLabelA.setBounds(35, 350, 240, 24);
 
-    irBlendSlider.setBounds(390, 335, 220, 35);
+    // Mitte: Blend Fader
+    irBlendSlider.setBounds(370, 335, 260, 35);
 
-    loadIrBtnB.setBounds(650, 320, 140, 26);
-    irNameLabelB.setBounds(650, 350, 180, 22);
+    // Cab B mit Browser [<] [>]
+    loadIrBtnB.setBounds(660, 318, 105, 26);
+    prevIrBtnB.setBounds(770, 318, 28, 26);
+    nextIrBtnB.setBounds(801, 318, 28, 26);
+    irNameLabelB.setBounds(660, 350, 240, 24);
 
-    irBypassButton.setBounds(850, 320, 110, 26);
+    // Bypass Button ganz rechts
+    irBypassButton.setBounds(875, 318, 100, 26);
 }
 
 bool DiezelEinsteinAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files)
@@ -233,6 +366,7 @@ void DiezelEinsteinAudioProcessorEditor::filesDropped(const juce::StringArray& f
     if (files.size() >= 1)
     {
         juce::File wavFile(files[0]);
+        scanIrFolderA(wavFile);
         audioProcessor.loadCabFileA(wavFile);
         irNameLabelA.setText("A: " + wavFile.getFileName(), juce::dontSendNotification);
     }

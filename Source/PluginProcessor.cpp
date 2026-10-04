@@ -113,9 +113,81 @@ juce::AudioProcessorEditor* DiezelEinsteinAudioProcessor::createEditor()
     return new DiezelEinsteinAudioProcessorEditor(*this);
 }
 
+void DiezelEinsteinAudioProcessor::loadCabFileA(const juce::File& file)
+{
+    if (file.existsAsFile())
+    {
+        irFileA = file;
+        lastIrDirA = file.getParentDirectory();
+        dspEngine.loadCabinetIR_A(file);
+    }
+}
+
+void DiezelEinsteinAudioProcessor::loadCabFileB(const juce::File& file)
+{
+    if (file.existsAsFile())
+    {
+        irFileB = file;
+        lastIrDirB = file.getParentDirectory();
+        dspEngine.loadCabinetIR_B(file);
+    }
+}
+
+void DiezelEinsteinAudioProcessor::savePresetToFile(const juce::File& file)
+{
+    auto state = apvts.copyState();
+    state.setProperty("irPathA", irFileA.getFullPathName(), nullptr);
+    state.setProperty("irPathB", irFileB.getFullPathName(), nullptr);
+    state.setProperty("irFolderA", lastIrDirA.getFullPathName(), nullptr);
+    state.setProperty("irFolderB", lastIrDirB.getFullPathName(), nullptr);
+
+    std::unique_ptr<juce::XmlElement> xml(state.createXml());
+    xml->writeTo(file);
+}
+
+bool DiezelEinsteinAudioProcessor::loadPresetFromFile(const juce::File& file)
+{
+    if (!file.existsAsFile()) return false;
+    auto xml = juce::parseXML(file);
+    if (xml != nullptr && xml->hasTagName(apvts.state.getType()))
+    {
+        auto newTree = juce::ValueTree::fromXml(*xml);
+        apvts.replaceState(newTree);
+
+        if (newTree.hasProperty("irPathA"))
+        {
+            juce::File fA(newTree.getProperty("irPathA").toString());
+            if (fA.existsAsFile()) loadCabFileA(fA);
+        }
+        if (newTree.hasProperty("irFolderA"))
+        {
+            juce::File dir(newTree.getProperty("irFolderA").toString());
+            if (dir.isDirectory()) lastIrDirA = dir;
+        }
+
+        if (newTree.hasProperty("irPathB"))
+        {
+            juce::File fB(newTree.getProperty("irPathB").toString());
+            if (fB.existsAsFile()) loadCabFileB(fB);
+        }
+        if (newTree.hasProperty("irFolderB"))
+        {
+            juce::File dir(newTree.getProperty("irFolderB").toString());
+            if (dir.isDirectory()) lastIrDirB = dir;
+        }
+        return true;
+    }
+    return false;
+}
+
 void DiezelEinsteinAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
+    state.setProperty("irPathA", irFileA.getFullPathName(), nullptr);
+    state.setProperty("irPathB", irFileB.getFullPathName(), nullptr);
+    state.setProperty("irFolderA", lastIrDirA.getFullPathName(), nullptr);
+    state.setProperty("irFolderB", lastIrDirB.getFullPathName(), nullptr);
+
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -124,7 +196,32 @@ void DiezelEinsteinAudioProcessor::setStateInformation(const void* data, int siz
 {
     std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
     if (xmlState != nullptr && xmlState->hasTagName(apvts.state.getType()))
-        apvts.replaceState(juce::ValueTree::fromXml(*xmlState));
+    {
+        auto newTree = juce::ValueTree::fromXml(*xmlState);
+        apvts.replaceState(newTree);
+
+        if (newTree.hasProperty("irPathA"))
+        {
+            juce::File fA(newTree.getProperty("irPathA").toString());
+            if (fA.existsAsFile()) loadCabFileA(fA);
+        }
+        if (newTree.hasProperty("irFolderA"))
+        {
+            juce::File dir(newTree.getProperty("irFolderA").toString());
+            if (dir.isDirectory()) lastIrDirA = dir;
+        }
+
+        if (newTree.hasProperty("irPathB"))
+        {
+            juce::File fB(newTree.getProperty("irPathB").toString());
+            if (fB.existsAsFile()) loadCabFileB(fB);
+        }
+        if (newTree.hasProperty("irFolderB"))
+        {
+            juce::File dir(newTree.getProperty("irFolderB").toString());
+            if (dir.isDirectory()) lastIrDirB = dir;
+        }
+    }
 }
 
 //==============================================================================
