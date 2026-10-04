@@ -1,4 +1,4 @@
-name: Build Jose Mod Amp
+name: Build Diezel Einstein Amp
 on: [push, workflow_dispatch]
 
 jobs:
@@ -27,5 +27,5 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: JoseModAmp-Windows
-          path: build/JoseModAmp_artefacts/Release/
+          name: DiezelEinstein-Windows
+          path: build/DiezelEinstein_artefacts/Release/

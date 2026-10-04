@@ -2,11 +2,11 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "DiezelDspEngine.h"
 
-class JoseModAmpAudioProcessor : public juce::AudioProcessor
+class DiezelEinsteinAudioProcessor : public juce::AudioProcessor
 {
 public:
-    JoseModAmpAudioProcessor();
-    ~JoseModAmpAudioProcessor() override = default;
+    DiezelEinsteinAudioProcessor();
+    ~DiezelEinsteinAudioProcessor() override = default;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -43,5 +43,5 @@ private:
 
     DiezelDspEngine dspEngine;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JoseModAmpAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DiezelEinsteinAudioProcessor)
 };

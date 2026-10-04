@@ -1,47 +1,104 @@
-#pragma once
-#include <juce_audio_processors/juce_audio_processors.h>
-#include "DiezelDspEngine.h"
+#include "PluginProcessor.h"
+#include "PluginEditor.h"
 
-class JoseModAmpAudioProcessor : public juce::AudioProcessor
+DiezelEinsteinAudioProcessor::DiezelEinsteinAudioProcessor()
+    : AudioProcessor(BusesProperties()
+                     .withInput("Input", juce::AudioChannelSet::stereo(), true)
+                     .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
+      apvts(*this, nullptr, "Parameters", createParameterLayout())
 {
-public:
-    JoseModAmpAudioProcessor();
-    ~JoseModAmpAudioProcessor() override = default;
+}
 
-    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override;
+juce::AudioProcessorValueTreeState::ParameterLayout DiezelEinsteinAudioProcessor::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
+    // Front Panel Controls
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("gain", "Gain", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.65f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("tight", "Tightness", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.6f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("bass", "Bass", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("middle", "Middle", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.55f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("treble", "Treble", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("presence", "Presence", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("deep", "Deep", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.65f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("master", "Master", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.6f));
 
-    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    // Mode Selector & Cabinet
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("amp_mode", "Amp Mode", juce::StringArray{"Clean", "Crunch", "Mega"}, 2));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("ir_bypass", "Bypass IR Cab", false));
 
-    juce::AudioProcessorEditor* createEditor() override;
-    bool hasEditor() const override { return true; }
+    return { params.begin(), params.end() };
+}
 
-    const juce::String getName() const override { return "Diezel Einstein Amp"; }
+void DiezelEinsteinAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    juce::dsp::ProcessSpec spec;
+    spec.sampleRate = sampleRate;
+    spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
+    spec.numChannels = static_cast<juce::uint32>(getTotalNumOutputChannels());
 
-    bool acceptsMidi() const override { return false; }
-    bool producesMidi() const override { return false; }
-    bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    dspEngine.prepare(spec);
+}
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return {}; }
-    void changeProgramName(int, const juce::String&) override {}
+void DiezelEinsteinAudioProcessor::releaseResources()
+{
+    dspEngine.reset();
+}
 
-    void getStateInformation(juce::MemoryBlock& destData) override;
-    void setStateInformation(const void* data, int sizeInBytes) override;
+bool DiezelEinsteinAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
+{
+    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
+     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+        return false;
 
-    juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
-    void loadCabFile(const juce::File& file) { dspEngine.loadCabinetIR(file); }
+    if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
+        return false;
 
-private:
-    juce::AudioProcessorValueTreeState apvts;
-    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    return true;
+}
 
-    DiezelDspEngine dspEngine;
+void DiezelEinsteinAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+{
+    juce::ScopedNoDenormals noDenormals;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(JoseModAmpAudioProcessor)
-};
+    dspEngine.setGain(*apvts.getRawParameterValue("gain"));
+    dspEngine.setTight(*apvts.getRawParameterValue("tight"));
+    dspEngine.setBass(*apvts.getRawParameterValue("bass"));
+    dspEngine.setMiddle(*apvts.getRawParameterValue("middle"));
+    dspEngine.setTreble(*apvts.getRawParameterValue("treble"));
+    dspEngine.setPresence(*apvts.getRawParameterValue("presence"));
+    dspEngine.setDeep(*apvts.getRawParameterValue("deep"));
+    dspEngine.setMaster(*apvts.getRawParameterValue("master"));
+
+    dspEngine.setMode(static_cast<int>(*apvts.getRawParameterValue("amp_mode")));
+    dspEngine.setIrBypass(*apvts.getRawParameterValue("ir_bypass") > 0.5f);
+
+    juce::dsp::AudioBlock<float> block(buffer);
+    juce::dsp::ProcessContextReplacing<float> context(block);
+    dspEngine.process(context);
+}
+
+juce::AudioProcessorEditor* DiezelEinsteinAudioProcessor::createEditor()
+{
+    return new DiezelEinsteinAudioProcessorEditor(*this);
+}
+
+void DiezelEinsteinAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
+{
+    auto state = apvts.copyState();
+    std::unique_ptr<juce::XmlElement> xml(state.createXml());
+    copyXmlToBinary(*xml, destData);
+}
+
+void DiezelEinsteinAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
+{
+    std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
+    if (xmlState != nullptr && xmlState->hasTagName(apvts.state.getType()))
+        apvts.replaceState(juce::ValueTree::fromXml(*xmlState));
+}
+
+//==============================================================================
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new DiezelEinsteinAudioProcessor();
+}

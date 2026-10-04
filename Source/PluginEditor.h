@@ -1,150 +1,41 @@
-#include "PluginProcessor.h"
-#include "PluginEditor.h"
+#pragma once
+#include <juce_gui_basics/juce_gui_basics.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 
-JoseModAmpAudioProcessorEditor::JoseModAmpAudioProcessorEditor(JoseModAmpAudioProcessor& p)
-    : AudioProcessorEditor(&p), audioProcessor(p)
+class DiezelEinsteinAudioProcessor;
+
+class DiezelEinsteinAudioProcessorEditor : public juce::AudioProcessorEditor,
+                                           public juce::FileDragAndDropTarget
 {
-    setSize(920, 380);
+public:
+    explicit DiezelEinsteinAudioProcessorEditor(DiezelEinsteinAudioProcessor&);
+    ~DiezelEinsteinAudioProcessorEditor() override = default;
 
-    // Knobs registrieren
-    setupRotary(gainSlider, "gain");
-    setupRotary(tightSlider, "tight");
-    setupRotary(bassSlider, "bass");
-    setupRotary(midSlider, "middle");
-    setupRotary(trebleSlider, "treble");
-    setupRotary(presenceSlider, "presence");
-    setupRotary(deepSlider, "deep");
-    setupRotary(masterSlider, "master");
+    void paint(juce::Graphics&) override;
+    void resized() override;
 
-    // Mode Selector (Clean / Crunch / Mega)
-    modeSelector.addItem("Mode 1: CLEAN", 1);
-    modeSelector.addItem("Mode 2: CRUNCH", 2);
-    modeSelector.addItem("Mode 3: MEGA", 3);
-    addAndMakeVisible(modeSelector);
-    modeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-        audioProcessor.getAPVTS(), "amp_mode", modeSelector);
+    bool isInterestedInFileDrag(const juce::StringArray& files) override;
+    void filesDropped(const juce::StringArray& files, int x, int y) override;
 
-    // IR Loader Controls
-    addAndMakeVisible(loadIrBtn);
-    loadIrBtn.onClick = [this]() {
-        fileChooser = std::make_unique<juce::FileChooser>(
-            "Wähle Speaker IR (.wav)...", juce::File::getSpecialLocation(juce::File::userHomeDirectory), "*.wav");
-        fileChooser->launchAsync(juce::FileBrowserComponent::openMode,
-            [this](const juce::FileChooser& fc) {
-                auto file = fc.getResult();
-                if (file.existsAsFile()) {
-                    audioProcessor.loadCabFile(file);
-                    irNameLabel.setText(file.getFileName(), juce::dontSendNotification);
-                }
-            });
-    };
+private:
+    DiezelEinsteinAudioProcessor& audioProcessor;
 
-    irBypassButton.setButtonText("Bypass Cab");
-    addAndMakeVisible(irBypassButton);
-    irBypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-        audioProcessor.getAPVTS(), "ir_bypass", irBypassButton);
+    // Diezel Front Panel Knobs
+    juce::Slider gainSlider, tightSlider, bassSlider, midSlider, trebleSlider, presenceSlider, deepSlider, masterSlider;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAttachments;
 
-    irNameLabel.setText("Keine IR geladen", juce::dontSendNotification);
-    irNameLabel.setColour(juce::Label::textColourId, juce::Colour(0xff4fc3f7)); // Helles Diezel-Blau
-    addAndMakeVisible(irNameLabel);
-}
+    // Mode Selector & Cabinet
+    juce::ComboBox modeSelector;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
 
-void JoseModAmpAudioProcessorEditor::setupRotary(juce::Slider& s, const juce::String& paramId)
-{
-    s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    s.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 54, 18);
-    addAndMakeVisible(s);
-    sliderAttachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        audioProcessor.getAPVTS(), paramId, s));
-}
+    juce::ToggleButton irBypassButton;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> irBypassAttachment;
 
-void JoseModAmpAudioProcessorEditor::paint(juce::Graphics& g)
-{
-    // Diezel Anthrazit Chassis
-    g.fillAll(juce::Colour(0xff161618));
+    juce::TextButton loadIrBtn { "Load Diezel 4x12 IR (.wav)" };
+    std::unique_ptr<juce::FileChooser> fileChooser;
+    juce::Label irNameLabel;
 
-    // Gebürstetes Aluminium / Dunkle Frontplatte
-    auto plate = juce::Rectangle<int>(15, 15, getWidth() - 30, 230);
-    juce::ColourGradient plateGrad(juce::Colour(0xff2d2e33), 0, 15, juce::Colour(0xff1b1c1e), 0, 245, false);
-    g.setGradientFill(plateGrad);
-    g.fillRoundedRectangle(plate.toFloat(), 4.0f);
-    g.setColour(juce::Colour(0xff44464f));
-    g.drawRoundedRectangle(plate.toFloat(), 4.0f, 1.5f);
+    void setupRotary(juce::Slider& slider, const juce::String& paramId);
 
-    // Diezel Typenschild
-    g.setColour(juce::Colours::white);
-    g.setFont(juce::FontOptions(22.0f, juce::Font::bold));
-    g.drawText("DIEZEL", 35, 25, 140, 25, juce::Justification::left);
-
-    g.setColour(juce::Colour(0xff00b0ff)); // Diezel Cyan-Blau
-    g.setFont(juce::FontOptions(16.0f, juce::Font::bold));
-    g.drawText("EINSTEIN 100", 145, 27, 200, 25, juce::Justification::left);
-
-    // Regler-Labels
-    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-    g.setColour(juce::Colour(0xffcfd8dc));
-
-    const char* labels[] = { "GAIN", "TIGHT", "BASS", "MIDDLE", "TREBLE", "PRESENCE", "DEEP", "MASTER" };
-    int startX = 35;
-    int spacing = 105;
-
-    for (int i = 0; i < 8; ++i)
-    {
-        // "TIGHT" und "DEEP" farblich hervorheben
-        if (i == 1 || i == 6)
-            g.setColour(juce::Colour(0xff00b0ff));
-        else
-            g.setColour(juce::Colour(0xffcfd8dc));
-
-        g.drawText(labels[i], startX + i * spacing, 195, 80, 20, juce::Justification::centred);
-    }
-
-    // Untere Leiste (Cabinet / Modi)
-    auto botBar = juce::Rectangle<int>(15, 260, getWidth() - 30, 100);
-    g.setColour(juce::Colour(0xff1f2024));
-    g.fillRoundedRectangle(botBar.toFloat(), 4.0f);
-    g.setColour(juce::Colour(0xff33353b));
-    g.drawRoundedRectangle(botBar.toFloat(), 4.0f, 1.0f);
-
-    g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
-    g.setColour(juce::Colours::white);
-    g.drawText("CHANNEL 1 MODE:", 35, 280, 150, 25, juce::Justification::left);
-    g.drawText("CABINET IR LOADER:", 35, 320, 150, 25, juce::Justification::left);
-}
-
-void JoseModAmpAudioProcessorEditor::resized()
-{
-    int startX = 35;
-    int spacing = 105;
-
-    // 8 Front-Knobs
-    gainSlider.setBounds(startX + 0 * spacing, 70, 80, 115);
-    tightSlider.setBounds(startX + 1 * spacing, 70, 80, 115);
-    bassSlider.setBounds(startX + 2 * spacing, 70, 80, 115);
-    midSlider.setBounds(startX + 3 * spacing, 70, 80, 115);
-    trebleSlider.setBounds(startX + 4 * spacing, 70, 80, 115);
-    presenceSlider.setBounds(startX + 5 * spacing, 70, 80, 115);
-    deepSlider.setBounds(startX + 6 * spacing, 70, 80, 115);
-    masterSlider.setBounds(startX + 7 * spacing, 70, 80, 115);
-
-    // Untere Leiste
-    modeSelector.setBounds(180, 278, 200, 26);
-    loadIrBtn.setBounds(180, 318, 240, 26);
-    irNameLabel.setBounds(435, 318, 300, 26);
-    irBypassButton.setBounds(760, 318, 120, 26);
-}
-
-bool JoseModAmpAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files)
-{
-    return files.size() == 1 && files[0].endsWithIgnoreCase(".wav");
-}
-
-void JoseModAmpAudioProcessorEditor::filesDropped(const juce::StringArray& files, int, int)
-{
-    if (files.size() == 1)
-    {
-        juce::File wavFile(files[0]);
-        audioProcessor.loadCabFile(wavFile);
-        irNameLabel.setText(wavFile.getFileName(), juce::dontSendNotification);
-    }
-}
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DiezelEinsteinAudioProcessorEditor)
+};

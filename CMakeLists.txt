@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
-project(DiezelEinstein VERSION 1.0.0)
+project(DiezelEinstein VERSION 1.0.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # JUCE 8 via FetchContent laden
 include(FetchContent)
@@ -20,6 +23,8 @@ juce_add_plugin(DiezelEinstein
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    COPY_PLUGIN_AFTER_BUILD FALSE
 )
 
 target_sources(DiezelEinstein PRIVATE
@@ -30,11 +35,20 @@ target_sources(DiezelEinstein PRIVATE
     Source/DiezelDspEngine.h
 )
 
-target_compile_features(DiezelEinstein PRIVATE cxx_std_20)
+target_compile_definitions(DiezelEinstein
+    PUBLIC
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+)
 
-target_link_libraries(DiezelEinstein PRIVATE
-    juce::juce_audio_utils
-    juce::juce_dsp
-    juce::juce_gui_basics
-    juce::juce_gui_extra
+target_link_libraries(DiezelEinstein
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+        juce::juce_gui_basics
+        juce::juce_gui_extra
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags
 )

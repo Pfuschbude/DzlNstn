@@ -1,48 +1,34 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-JoseModAmpAudioProcessorEditor::JoseModAmpAudioProcessorEditor(JoseModAmpAudioProcessor& p)
+DiezelEinsteinAudioProcessorEditor::DiezelEinsteinAudioProcessorEditor(DiezelEinsteinAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
-    setSize(820, 480);
+    setSize(920, 380);
 
-    // Front Panel Knobs
+    // Knobs registrieren
     setupRotary(gainSlider, "gain");
+    setupRotary(tightSlider, "tight");
     setupRotary(bassSlider, "bass");
     setupRotary(midSlider, "middle");
     setupRotary(trebleSlider, "treble");
     setupRotary(presenceSlider, "presence");
+    setupRotary(deepSlider, "deep");
     setupRotary(masterSlider, "master");
 
-    // Workbench Slider (Linear Bar)
-    auto setupModSlider = [this](juce::Slider& s, const juce::String& paramId) {
-        s.setSliderStyle(juce::Slider::LinearHorizontal);
-        s.setTextBoxStyle(juce::Slider::TextBoxRight, false, 70, 20);
-        addAndMakeVisible(s);
-        sliderAttachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-            audioProcessor.getAPVTS(), paramId, s));
-    };
-
-    setupModSlider(cathodeSlider, "cathode_cap");
-    setupModSlider(brightSlider, "bright_cap");
-    setupModSlider(slopeSlider, "slope_res");
-
-    // Diode Selector
-    diodeSelector.addItem("0: Stock (Pure Tube)", 1);
-    diodeSelector.addItem("1: Silicon 1N4148", 2);
-    diodeSelector.addItem("2: Jose Mod (Zener 4.7V)", 3);
-    diodeSelector.addItem("3: Red LEDs", 4);
-    addAndMakeVisible(diodeSelector);
-    diodeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-        audioProcessor.getAPVTS(), "diode_mode", diodeSelector);
+    // Mode Selector (Clean / Crunch / Mega)
+    modeSelector.addItem("Mode 1: CLEAN", 1);
+    modeSelector.addItem("Mode 2: CRUNCH", 2);
+    modeSelector.addItem("Mode 3: MEGA", 3);
+    addAndMakeVisible(modeSelector);
+    modeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        audioProcessor.getAPVTS(), "amp_mode", modeSelector);
 
     // IR Loader Controls
     addAndMakeVisible(loadIrBtn);
     loadIrBtn.onClick = [this]() {
         fileChooser = std::make_unique<juce::FileChooser>(
-            "Wähle eine Speaker IR (.wav)...", juce::File::getSpecialLocation(juce::File::userHomeDirectory), "*.wav");
-        
-        // In JUCE 8 reicht 'openMode' vollkommen aus (kein canFiles Flag nötig)
+            "Wähle Speaker IR (.wav)...", juce::File::getSpecialLocation(juce::File::userHomeDirectory), "*.wav");
         fileChooser->launchAsync(juce::FileBrowserComponent::openMode,
             [this](const juce::FileChooser& fc) {
                 auto file = fc.getResult();
@@ -59,95 +45,101 @@ JoseModAmpAudioProcessorEditor::JoseModAmpAudioProcessorEditor(JoseModAmpAudioPr
         audioProcessor.getAPVTS(), "ir_bypass", irBypassButton);
 
     irNameLabel.setText("Keine IR geladen", juce::dontSendNotification);
-    irNameLabel.setColour(juce::Label::textColourId, juce::Colours::goldenrod);
+    irNameLabel.setColour(juce::Label::textColourId, juce::Colour(0xff4fc3f7)); // Helles Diezel-Blau
     addAndMakeVisible(irNameLabel);
 }
 
-void JoseModAmpAudioProcessorEditor::setupRotary(juce::Slider& s, const juce::String& paramId)
+void DiezelEinsteinAudioProcessorEditor::setupRotary(juce::Slider& s, const juce::String& paramId)
 {
     s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    s.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 50, 18);
+    s.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 54, 18);
     addAndMakeVisible(s);
     sliderAttachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         audioProcessor.getAPVTS(), paramId, s));
 }
 
-void JoseModAmpAudioProcessorEditor::paint(juce::Graphics& g)
+void DiezelEinsteinAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    // Vintage Marshall Head Tolex
-    g.fillAll(juce::Colour(0xff121212));
+    // Diezel Anthrazit Chassis
+    g.fillAll(juce::Colour(0xff161618));
 
-    // Gold Anodized Faceplate (Amp Top)
-    auto goldRect = juce::Rectangle<int>(15, 15, getWidth() - 30, 200);
-    juce::ColourGradient goldGrad(juce::Colour(0xffd4af37), 0, 15, juce::Colour(0xff7d6012), 0, 215, false);
-    g.setGradientFill(goldGrad);
-    g.fillRoundedRectangle(goldRect.toFloat(), 6.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.6f));
-    g.drawRoundedRectangle(goldRect.toFloat(), 6.0f, 2.0f);
+    // Gebürstetes Aluminium / Dunkle Frontplatte
+    auto plate = juce::Rectangle<int>(15, 15, getWidth() - 30, 230);
+    juce::ColourGradient plateGrad(juce::Colour(0xff2d2e33), 0, 15, juce::Colour(0xff1b1c1e), 0, 245, false);
+    g.setGradientFill(plateGrad);
+    g.fillRoundedRectangle(plate.toFloat(), 4.0f);
+    g.setColour(juce::Colour(0xff44464f));
+    g.drawRoundedRectangle(plate.toFloat(), 4.0f, 1.5f);
 
-    // Frontplate Titles
-    g.setColour(juce::Colours::black);
-    g.setFont(juce::FontOptions(20.0f, juce::Font::bold));
-    g.drawText("JCM 800 - 2203 [JOSE ARREDONDO MOD]", 35, 22, 450, 25, juce::Justification::left);
+    // Diezel Typenschild
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::FontOptions(22.0f, juce::Font::bold));
+    g.drawText("DIEZEL", 35, 25, 140, 25, juce::Justification::left);
 
-    // Knob Labels
+    g.setColour(juce::Colour(0xff00b0ff)); // Diezel Cyan-Blau
+    g.setFont(juce::FontOptions(16.0f, juce::Font::bold));
+    g.drawText("EINSTEIN 100", 145, 27, 200, 25, juce::Justification::left);
+
+    // Regler-Labels
     g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-    const char* labels[] = { "PREAMP", "BASS", "MIDDLE", "TREBLE", "PRESENCE", "MASTER" };
-    for (int i = 0; i < 6; ++i)
+    g.setColour(juce::Colour(0xffcfd8dc));
+
+    const char* labels[] = { "GAIN", "TIGHT", "BASS", "MIDDLE", "TREBLE", "PRESENCE", "DEEP", "MASTER" };
+    int startX = 35;
+    int spacing = 105;
+
+    for (int i = 0; i < 8; ++i)
     {
-        g.drawText(labels[i], 35 + i * 125, 175, 90, 20, juce::Justification::centred);
+        // "TIGHT" und "DEEP" farblich hervorheben
+        if (i == 1 || i == 6)
+            g.setColour(juce::Colour(0xff00b0ff));
+        else
+            g.setColour(juce::Colour(0xffcfd8dc));
+
+        g.drawText(labels[i], startX + i * spacing, 195, 80, 20, juce::Justification::centred);
     }
 
-    // Workbench / Modder Bay Background (Amp Bottom)
-    auto modRect = juce::Rectangle<int>(15, 230, getWidth() - 30, 235);
-    g.setColour(juce::Colour(0xff1a1a1c));
-    g.fillRoundedRectangle(modRect.toFloat(), 6.0f);
-    g.setColour(juce::Colour(0xff333338));
-    g.drawRoundedRectangle(modRect.toFloat(), 6.0f, 1.5f);
+    // Untere Leiste (Cabinet / Modi)
+    auto botBar = juce::Rectangle<int>(15, 260, getWidth() - 30, 100);
+    g.setColour(juce::Colour(0xff1f2024));
+    g.fillRoundedRectangle(botBar.toFloat(), 4.0f);
+    g.setColour(juce::Colour(0xff33353b));
+    g.drawRoundedRectangle(botBar.toFloat(), 4.0f, 1.0f);
 
-    g.setColour(juce::Colour(0xffd4af37));
-    g.setFont(juce::FontOptions(14.0f, juce::Font::bold));
-    g.drawText("CIRCUIT MODDING BENCH (INTERAKTIVE BAUTEILE)", 35, 240, 400, 25, juce::Justification::left);
-
-    g.setFont(juce::FontOptions(11.0f, juce::Font::plain));
-    g.setColour(juce::Colours::lightgrey);
-    g.drawText("V1b Cathode Cap (Tightness / Bass-Kompression):", 35, 275, 300, 20, juce::Justification::left);
-    g.drawText("Bright Cap (Top-End Grit / Bite):", 35, 305, 300, 20, juce::Justification::left);
-    g.drawText("Slope Resistor (Tonestack Mid Frequency Shift):", 35, 335, 300, 20, juce::Justification::left);
-    g.drawText("Clipping Diodes Stufe:", 35, 370, 200, 20, juce::Justification::left);
-    g.drawText("Cabinet Impulse Response (.WAV):", 35, 410, 220, 20, juce::Justification::left);
+    g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
+    g.setColour(juce::Colours::white);
+    g.drawText("CHANNEL 1 MODE:", 35, 280, 150, 25, juce::Justification::left);
+    g.drawText("CABINET IR LOADER:", 35, 320, 150, 25, juce::Justification::left);
 }
 
-void JoseModAmpAudioProcessorEditor::resized()
+void DiezelEinsteinAudioProcessorEditor::resized()
 {
-    // Frontplate Knobs
     int startX = 35;
-    int spacing = 125;
-    gainSlider.setBounds(startX + 0 * spacing, 60, 90, 110);
-    bassSlider.setBounds(startX + 1 * spacing, 60, 90, 110);
-    midSlider.setBounds(startX + 2 * spacing, 60, 90, 110);
-    trebleSlider.setBounds(startX + 3 * spacing, 60, 90, 110);
-    presenceSlider.setBounds(startX + 4 * spacing, 60, 90, 110);
-    masterSlider.setBounds(startX + 5 * spacing, 60, 90, 110);
+    int spacing = 105;
 
-    // Workbench Slider
-    cathodeSlider.setBounds(340, 275, 430, 22);
-    brightSlider.setBounds(340, 305, 430, 22);
-    slopeSlider.setBounds(340, 335, 430, 22);
-    diodeSelector.setBounds(340, 368, 220, 25);
+    // 8 Front-Knobs
+    gainSlider.setBounds(startX + 0 * spacing, 70, 80, 115);
+    tightSlider.setBounds(startX + 1 * spacing, 70, 80, 115);
+    bassSlider.setBounds(startX + 2 * spacing, 70, 80, 115);
+    midSlider.setBounds(startX + 3 * spacing, 70, 80, 115);
+    trebleSlider.setBounds(startX + 4 * spacing, 70, 80, 115);
+    presenceSlider.setBounds(startX + 5 * spacing, 70, 80, 115);
+    deepSlider.setBounds(startX + 6 * spacing, 70, 80, 115);
+    masterSlider.setBounds(startX + 7 * spacing, 70, 80, 115);
 
-    // IR Loader Row
-    loadIrBtn.setBounds(340, 410, 220, 28);
-    irNameLabel.setBounds(570, 410, 150, 28);
-    irBypassButton.setBounds(720, 410, 75, 28);
+    // Untere Leiste
+    modeSelector.setBounds(180, 278, 200, 26);
+    loadIrBtn.setBounds(180, 318, 240, 26);
+    irNameLabel.setBounds(435, 318, 300, 26);
+    irBypassButton.setBounds(760, 318, 120, 26);
 }
 
-bool JoseModAmpAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files)
+bool DiezelEinsteinAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files)
 {
     return files.size() == 1 && files[0].endsWithIgnoreCase(".wav");
 }
 
-void JoseModAmpAudioProcessorEditor::filesDropped(const juce::StringArray& files, int, int)
+void DiezelEinsteinAudioProcessorEditor::filesDropped(const juce::StringArray& files, int, int)
 {
     if (files.size() == 1)
     {
